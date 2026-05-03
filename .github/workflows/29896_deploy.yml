@@ -1,0 +1,57 @@
+name: 29896 Deploy CI
+
+on:
+  workflow_run:
+    workflows: ["29896 Test CI"]
+    types:
+      - completed
+    branches: [ main ]
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  docker-deploy:
+    runs-on: self-hosted
+
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+
+    steps:
+      - name: Prenesi kodo
+        uses: actions/checkout@v4
+
+      - name: Prenesi napaka.txt artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: napaka
+          path: artifacts
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          run-id: ${{ github.event.workflow_run.id }}
+
+      - name: Preveri vsebino napaka.txt
+        shell: bash
+        run: |
+          if [ -s artifacts/napaka.txt ]; then
+            echo "Datoteka napaka.txt ni prazna:"
+            cat artifacts/napaka.txt
+            exit 1
+          fi
+
+          echo "Datoteka napaka.txt je prazna, nadaljujem z objavo."
+
+      - name: Prijava v DockerHub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Zgradi Docker sliko
+        shell: bash
+        run: |
+          docker build -t ${{ secrets.DOCKERHUB_USERNAME }}/naloga-29896:latest .
+
+      - name: Objavi Docker sliko
+        shell: bash
+        run: |
+          docker push ${{ secrets.DOCKERHUB_USERNAME }}/naloga-29896:latest
